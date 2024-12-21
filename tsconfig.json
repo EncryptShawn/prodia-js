@@ -9,8 +9,7 @@
 		"sourceMap": true,
 		"outDir": "dist",
 		"baseUrl": ".",
-		"declaration": true,
-		"types": ["node"]
+		"declaration": true
 	},
 	"files": ["prodia.ts", "v2/index.ts"]
 }
