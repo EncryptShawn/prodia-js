@@ -93,17 +93,13 @@ export const createProdia = ({
 
 		const formData = new FormData();
 
-		// Handle input files/blobs/buffers
+		// Handle input files/blobs/buffers for Node.js
 		if (options.inputs !== undefined) {
 			for (const input of options.inputs) {
 				if (input instanceof Buffer) {
 					formData.append("input", input, "image.jpg");
 				} else if (input instanceof ArrayBuffer) {
-					formData.append(
-						"input",
-						Buffer.from(input),
-						"image.jpg",
-					);
+					formData.append("input", Buffer.from(input), "image.jpg");
 				} else {
 					throw new Error("Unsupported input type for Node.js backend");
 				}
@@ -121,19 +117,15 @@ export const createProdia = ({
 				method: "POST",
 				headers: {
 					Authorization: `Bearer ${token}`,
-					Accept: ["multipart/form-data", options.accept].filter(
-						Boolean,
-					).join("; "),
+					Accept: ["multipart/form-data", options.accept].filter(Boolean).join("; "),
 				},
 				body: formData,
 			});
 
-			// Handle successful responses
 			if (response.status >= 200 && response.status < 300) {
 				break;
 			}
 
-			// Handle rate limiting and retry logic
 			if (response.status === 429) {
 				retries += 1;
 			} else if (response.status < 200 || response.status > 299) {
@@ -141,9 +133,7 @@ export const createProdia = ({
 			}
 
 			const retryAfter = Number(response.headers.get("Retry-After")) || 1;
-			await new Promise((resolve) =>
-				setTimeout(resolve, retryAfter * 1000)
-			);
+			await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
 		} while (
 			response.status !== 400 &&
 			response.status !== 401 &&
@@ -154,14 +144,12 @@ export const createProdia = ({
 		);
 
 		if (response.status === 429) {
-			throw new ProdiaCapacityError(
-				"Unable to schedule the job with current token.",
-			);
+			throw new ProdiaCapacityError("Unable to schedule the job with current token.");
 		}
 
 		const body = await response.formData();
 		const job = JSON.parse(
-			Buffer.from(await body.get("job").arrayBuffer()).toString("utf-8")
+			Buffer.from(await body.get("job")?.arrayBuffer()).toString("utf-8"),
 		) as ProdiaJob;
 
 		if ("error" in job && typeof job.error === "string") {
@@ -169,17 +157,16 @@ export const createProdia = ({
 		}
 
 		if (response.status < 200 || response.status > 299) {
-			throw new ProdiaBadResponseError(
-				`${response.status} ${response.statusText}`,
-			);
+			throw new ProdiaBadResponseError(`${response.status} ${response.statusText}`);
 		}
 
-		// Replace FileReader logic with Node.js Buffer handling
+		// Handle Node.js-native binary output
 		const output = body.get("output");
 		if (!output) {
 			throw new Error("Output field is missing from the response");
 		}
 
+		// Use Node.js Buffer to return the binary data
 		const buffer = Buffer.from(await output.arrayBuffer());
 
 		return {
