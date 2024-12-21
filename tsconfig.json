@@ -10,7 +10,7 @@
 		"outDir": "dist",
 		"baseUrl": ".",
 		"declaration": true,
-		"types": ["node"]  /
+		"types": ["node"]
 	},
 	"files": ["prodia.ts", "v2/index.ts"]
 }
