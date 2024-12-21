@@ -161,19 +161,23 @@ export const createProdia = ({
 		}
 
 		// Handle Node.js-native binary output
+		
+		// Handle Node.js-native binary output
 		const output = body.get("output");
+
 		if (!output) {
-			throw new Error("Output field is missing from the response");
+    		throw new Error("Output field is missing from the response");
 		}
 
-		// Use Node.js Buffer to return the binary data
-		const buffer = Buffer.from(await output.arrayBuffer());
+		if (output instanceof Blob || output instanceof File) {
+		    const buffer = Buffer.from(await output.arrayBuffer());
+    		return {
+        		job: job,
+        		arrayBuffer: () => Promise.resolve(buffer),
+    		};
+		}
 
-		return {
-			job: job,
-			arrayBuffer: () => Promise.resolve(buffer),
-		};
-	};
+		throw new Error("Unsupported output type received");
 
 	return {
 		job,
