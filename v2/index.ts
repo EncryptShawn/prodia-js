@@ -175,7 +175,7 @@ export const createProdia = ({
         		job: job,
         		arrayBuffer: () => Promise.resolve(buffer),
     		};
-		}
+	}
 
 		throw new Error("Unsupported output type received");
 
