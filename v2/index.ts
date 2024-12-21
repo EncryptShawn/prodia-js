@@ -160,26 +160,25 @@ export const createProdia = ({
 			throw new ProdiaBadResponseError(`${response.status} ${response.statusText}`);
 		}
 
-		// Handle Node.js-native binary output
-		
-		// Handle Node.js-native binary output
 		const output = body.get("output");
 
 		if (!output) {
-    		throw new Error("Output field is missing from the response");
+			throw new Error("Output field is missing from the response");
 		}
 
 		if (output instanceof Blob || output instanceof File) {
-		    const buffer = Buffer.from(await output.arrayBuffer());
-    		return {
-        		job: job,
-        		arrayBuffer: () => Promise.resolve(buffer),
-    		};
-	}
+			const buffer = Buffer.from(await output.arrayBuffer());
+			return {
+				job: job,
+				arrayBuffer: () => Promise.resolve(buffer),
+			};
+		}
 
 		throw new Error("Unsupported output type received");
+	};
 
 	return {
 		job,
 	};
 };
+
