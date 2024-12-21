@@ -93,22 +93,36 @@ export const createProdia = ({
 
 		const formData = new FormData();
 
-		// Handle input files/blobs/buffers for Node.js
+		// TODO: The input content-type is assumed here, but it shouldn't be.
+		// Eventually we will support non-image inputs and we will need some way
+		// to specify the content-type of the input.
 		if (options.inputs !== undefined) {
 			for (const input of options.inputs) {
-				if (input instanceof Buffer) {
+				if (typeof File !== "undefined" && input instanceof File) {
+					formData.append("input", input, input.name);
+				}
+
+				if (input instanceof Blob) {
 					formData.append("input", input, "image.jpg");
-				} else if (input instanceof ArrayBuffer) {
-					formData.append("input", Buffer.from(input), "image.jpg");
-				} else {
-					throw new Error("Unsupported input type for Node.js backend");
+				}
+
+				if (input instanceof ArrayBuffer) {
+					formData.append(
+						"input",
+						new Blob([input], {
+							type: "image/jpeg",
+						}),
+						"image.jpg",
+					);
 				}
 			}
 		}
 
 		formData.append(
 			"job",
-			Buffer.from(JSON.stringify(params)),
+			new Blob([JSON.stringify(params)], {
+				type: "application/json",
+			}),
 			"job.json",
 		);
 
@@ -117,11 +131,14 @@ export const createProdia = ({
 				method: "POST",
 				headers: {
 					Authorization: `Bearer ${token}`,
-					Accept: ["multipart/form-data", options.accept].filter(Boolean).join("; "),
+					Accept: ["multipart/form-data", options.accept].filter(
+						Boolean,
+					).join("; "),
 				},
 				body: formData,
 			});
 
+			// We bail from the loop if we get a 2xx response to avoid sleeping unnecessarily.
 			if (response.status >= 200 && response.status < 300) {
 				break;
 			}
@@ -133,7 +150,9 @@ export const createProdia = ({
 			}
 
 			const retryAfter = Number(response.headers.get("Retry-After")) || 1;
-			await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+			await new Promise((resolve) =>
+				setTimeout(resolve, retryAfter * 1000)
+			);
 		} while (
 			response.status !== 400 &&
 			response.status !== 401 &&
@@ -144,12 +163,16 @@ export const createProdia = ({
 		);
 
 		if (response.status === 429) {
-			throw new ProdiaCapacityError("Unable to schedule the job with current token.");
+			throw new ProdiaCapacityError(
+				"Unable to schedule the job with current token.",
+			);
 		}
 
 		const body = await response.formData();
 		const job = JSON.parse(
-			Buffer.from(await body.get("job")?.arrayBuffer()).toString("utf-8"),
+			new TextDecoder().decode(
+				await (body.get("job") as Blob).arrayBuffer(),
+			),
 		) as ProdiaJob;
 
 		if ("error" in job && typeof job.error === "string") {
@@ -157,28 +180,21 @@ export const createProdia = ({
 		}
 
 		if (response.status < 200 || response.status > 299) {
-			throw new ProdiaBadResponseError(`${response.status} ${response.statusText}`);
+			throw new ProdiaBadResponseError(
+				`${response.status} ${response.statusText}`,
+			);
 		}
 
-		const output = body.get("output");
+		// Updated to Node.js-compatible code
+		const buffer = Buffer.from(await (body.get("output") as Blob).arrayBuffer());
 
-		if (!output) {
-			throw new Error("Output field is missing from the response");
-		}
-
-		if (output instanceof Blob || output instanceof File) {
-			const buffer = Buffer.from(await output.arrayBuffer());
-			return {
-				job: job,
-				arrayBuffer: () => Promise.resolve(buffer),
-			};
-		}
-
-		throw new Error("Unsupported output type received");
+		return {
+			job: job,
+			arrayBuffer: () => Promise.resolve(buffer),
+		};
 	};
 
 	return {
 		job,
 	};
 };
-
