@@ -1,4 +1,4 @@
-## This fork has been updated to support nodejs clients, it no longer uses filereader for direct browser support of raw streaming images.
+### This fork has been updated to support nodejs clients, it no longer uses filereader for direct browser support of raw streaming images.
 
 # [![Prodia](https://raw.githubusercontent.com/prodialabs/prodia-js/master/logo.svg)](https://prodia.com)
 
