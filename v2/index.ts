@@ -1,17 +1,4 @@
-/*
-                     ___
-   ___  _______  ___/ (_)__ _
-  / _ \/ __/ _ \/ _  / / _ `/
- / .__/_/  \___/\_,_/_/\_,_/
-/_/
-
-To ensure an optimal service
-quality, we recommend you use
-this library as-is. We cannot
-guarantee a high quality
-experience with a modified
-client library.
-*/
+import { Buffer } from 'buffer';
 
 type JsonObject =
 	& { [Key in string]: JsonValue }
@@ -21,8 +8,6 @@ type JsonObject =
 type JsonArray = JsonValue[] | readonly JsonValue[];
 type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonArray;
-
-/* job and job configuration */
 
 export type ProdiaJob = Record<string, JsonValue>;
 
@@ -34,7 +19,7 @@ export type ProdiaJobOptions = {
 		| "image/webp"
 		| "multipart/form-data"
 		| "video/mp4";
-	inputs?: (File | Blob | ArrayBuffer)[];
+	inputs?: (Buffer | ArrayBuffer)[];
 };
 
 const defaultJobOptions: ProdiaJobOptions = {
@@ -43,13 +28,8 @@ const defaultJobOptions: ProdiaJobOptions = {
 
 export type ProdiaJobResponse = {
 	job: ProdiaJob;
-
-	// Currently only one output field is expected for all job types.
-	//This will return the raw bytes for that output.
 	arrayBuffer: () => Promise<ArrayBuffer>;
 };
-
-/* client & client configuration*/
 
 export type Prodia = {
 	job: (
@@ -64,8 +44,6 @@ export type CreateProdiaOptions = {
 	maxErrors?: number;
 	maxRetries?: number;
 };
-
-/* error types */
 
 export class ProdiaUserError extends Error {}
 export class ProdiaCapacityError extends Error {}
@@ -93,37 +71,20 @@ export const createProdia = ({
 
 		const formData = new FormData();
 
-		// TODO: The input content-type is assumed here, but it shouldn't be.
-		// Eventually we will support non-image inputs and we will need some way
-		// to specify the content-type of the input.
 		if (options.inputs !== undefined) {
 			for (const input of options.inputs) {
-				if (typeof File !== "undefined" && input instanceof File) {
-					formData.append("input", input, input.name);
-				}
-
-				if (input instanceof Blob) {
-					formData.append("input", input, "image.jpg");
-				}
-
-				if (input instanceof ArrayBuffer) {
-					formData.append(
-						"input",
-						new Blob([input], {
-							type: "image/jpeg",
-						}),
-						"image.jpg",
-					);
+				if (Buffer.isBuffer(input)) {
+					formData.append("input", new Blob([input]), "image.jpg");
+				} else if (input instanceof ArrayBuffer) {
+					const buffer = Buffer.from(input);
+					formData.append("input", new Blob([buffer]), "image.jpg");
 				}
 			}
 		}
 
 		formData.append(
 			"job",
-			new Blob([JSON.stringify(params)], {
-				type: "application/json",
-			}),
-			"job.json",
+			new Blob([JSON.stringify(params)], { type: "application/json" }),
 		);
 
 		do {
@@ -131,14 +92,11 @@ export const createProdia = ({
 				method: "POST",
 				headers: {
 					Authorization: `Bearer ${token}`,
-					Accept: ["multipart/form-data", options.accept].filter(
-						Boolean,
-					).join("; "),
+					Accept: ["multipart/form-data", options.accept].filter(Boolean).join("; "),
 				},
 				body: formData,
 			});
 
-			// We bail from the loop if we get a 2xx response to avoid sleeping unnecessarily.
 			if (response.status >= 200 && response.status < 300) {
 				break;
 			}
@@ -150,9 +108,7 @@ export const createProdia = ({
 			}
 
 			const retryAfter = Number(response.headers.get("Retry-After")) || 1;
-			await new Promise((resolve) =>
-				setTimeout(resolve, retryAfter * 1000)
-			);
+			await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
 		} while (
 			response.status !== 400 &&
 			response.status !== 401 &&
@@ -168,12 +124,8 @@ export const createProdia = ({
 			);
 		}
 
-		const body = await response.formData();
-		const job = JSON.parse(
-			new TextDecoder().decode(
-				await (body.get("job") as Blob).arrayBuffer(),
-			),
-		) as ProdiaJob;
+		const body = await response.json();
+		const job = body.job as ProdiaJob;
 
 		if ("error" in job && typeof job.error === "string") {
 			throw new ProdiaUserError(job.error);
@@ -185,8 +137,7 @@ export const createProdia = ({
 			);
 		}
 
-		// Updated to Node.js-compatible code
-		const buffer = Buffer.from(await (body.get("output") as Blob).arrayBuffer());
+		const buffer = Buffer.from(body.output, 'base64');
 
 		return {
 			job: job,
